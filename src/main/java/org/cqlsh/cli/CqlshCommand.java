@@ -57,6 +57,9 @@ public class CqlshCommand implements Callable<Integer> {
     @Option(names = {"--ssl-truststore-password"}, description = "SSL truststore password", interactive = true)
     private String sslTruststorePassword;
     
+    @Option(names = {"--dc"}, description = "Local data center name for multi-datacenter clusters")
+    private String dataCenter;
+    
     // Timeout settings
     @Option(names = {"--connect-timeout"}, description = "Connection timeout in seconds")
     private int connectTimeout = 5;
@@ -104,7 +107,8 @@ public class CqlshCommand implements Callable<Integer> {
             Duration.ofSeconds(requestTimeout),
             useSsl,
             sslTruststore != null ? sslTruststore.getPath() : null,
-            sslTruststorePassword
+            sslTruststorePassword,
+            dataCenter
         );
         
         // Create formatting config

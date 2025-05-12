@@ -16,7 +16,9 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -64,6 +66,12 @@ public class ConnectionManager implements AutoCloseable {
             // Add keyspace if provided
             if (config.keyspace() != null && !config.keyspace().isBlank()) {
                 builder.withKeyspace(config.keyspace());
+            }
+            
+            // Set local data center if provided
+            if (config.dataCenter() != null && !config.dataCenter().isBlank()) {
+                builder.withLocalDatacenter(config.dataCenter());
+                logger.info("Using local data center: {}", config.dataCenter());
             }
             
             // Configure SSL if enabled
@@ -156,6 +164,42 @@ public class ConnectionManager implements AutoCloseable {
         metadata.getKeyspaces().forEach((k, v) -> keyspaces.add(k.toString()));
         
         return keyspaces;
+    }
+    
+    /**
+     * Gets the list of datacenters in the cluster with their node counts.
+     * @return list of datacenter information
+     */
+    public List<Map<String, String>> getDatacenters() {
+        CqlSession session = sessionRef.get();
+        if (session == null) {
+            throw new IllegalStateException("Not connected to Cassandra");
+        }
+        
+        Metadata metadata = session.getMetadata();
+        List<Map<String, String>> datacenters = new ArrayList<>();
+        
+        metadata.getNodes().forEach((nodeId, node) -> {
+            String dc = node.getDatacenter();
+            
+            // Find existing datacenter or create a new one
+            Map<String, String> datacenter = datacenters.stream()
+                .filter(d -> d.get("name").equals(dc))
+                .findFirst()
+                .orElse(null);
+            
+            if (datacenter == null) {
+                datacenter = new HashMap<>();
+                datacenter.put("name", dc);
+                datacenter.put("nodeCount", "1");
+                datacenters.add(datacenter);
+            } else {
+                int count = Integer.parseInt(datacenter.get("nodeCount"));
+                datacenter.put("nodeCount", String.valueOf(count + 1));
+            }
+        });
+        
+        return datacenters;
     }
     
     /**

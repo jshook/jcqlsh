@@ -15,7 +15,8 @@ public record ConnectionConfig(
     Duration requestTimeout,
     boolean useSsl,
     String sslTruststorePath,
-    String sslTruststorePassword
+    String sslTruststorePassword,
+    String dataCenter
 ) {
     /**
      * Validates the connection configuration.
@@ -41,5 +42,7 @@ public record ConnectionConfig(
         if (useSsl && (sslTruststorePath == null || sslTruststorePath.isBlank())) {
             throw new IllegalArgumentException("SSL truststore path is required when SSL is enabled");
         }
+        
+        // dataCenter can be null or empty, it's optional
     }
 }
