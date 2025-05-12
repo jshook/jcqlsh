@@ -1,0 +1,17 @@
+org\cqlsh\config\FormattingConfig.class
+org\cqlsh\connection\ConnectionException.class
+org\cqlsh\output\ResultFormatterFactory$TabularResultFormatter.class
+org\cqlsh\connection\QueryExecutionException.class
+org\cqlsh\shell\InteractiveShell.class
+org\cqlsh\JCqlshApp.class
+org\cqlsh\output\ResultFormatterFactory.class
+org\cqlsh\output\ResultFormatterFactory$JsonResultFormatter.class
+org\cqlsh\script\ScriptExecutor.class
+org\cqlsh\config\ConnectionConfig.class
+org\cqlsh\connection\ConnectionManager.class
+org\cqlsh\shell\InteractiveShell$CommandRegistry.class
+org\cqlsh\cli\CqlshCommand.class
+org\cqlsh\shell\InteractiveShell$CommandRegistry$CommandHandler.class
+org\cqlsh\output\ResultFormatterFactory$CsvResultFormatter.class
+org\cqlsh\output\ResultFormatter.class
+org\cqlsh\config\OutputFormat.class
