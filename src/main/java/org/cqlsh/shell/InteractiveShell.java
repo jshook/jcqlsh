@@ -24,23 +24,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
-import org.jline.reader.*;
-import org.jline.reader.impl.DefaultParser;
-import org.jline.reader.impl.completer.AggregateCompleter;
-import org.jline.reader.impl.completer.StringsCompleter;
-import org.jline.reader.impl.history.DefaultHistory;
-import org.jline.terminal.Terminal;
-import org.jline.terminal.TerminalBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Interactive shell implementation for the CQL shell, providing command history,
@@ -48,14 +31,14 @@ import java.util.stream.Collectors;
  */
 public class InteractiveShell {
     private static final Logger logger = LoggerFactory.getLogger(InteractiveShell.class);
-    
+
     private final ConnectionManager connectionManager;
     private final FormattingConfig formattingConfig;
     private final LineReader lineReader;
     private final Terminal terminal;
     private final ResultFormatterFactory formatterFactory;
     private final CommandRegistry commandRegistry;
-    
+
     // CQL Keywords for auto-completion
     private static final String[] CQL_KEYWORDS = {
         "SELECT", "FROM", "WHERE", "AND", "OR", "INSERT", "INTO", "VALUES", "UPDATE", "SET",
@@ -81,7 +64,7 @@ public class InteractiveShell {
         this.formattingConfig = formattingConfig;
         this.formatterFactory = new ResultFormatterFactory(formattingConfig);
         this.commandRegistry = new CommandRegistry();
-        
+
         // Register special commands
         registerSpecialCommands();
 
@@ -91,7 +74,7 @@ public class InteractiveShell {
                 .system(true)
                 .jansi(true)
                 .build();
-        
+
         // Configure the history file
         String userHome = System.getProperty("user.home");
         Path historyFile = Paths.get(userHome, ".jcqlsh_history");
@@ -102,14 +85,14 @@ public class InteractiveShell {
                 logger.warn("Could not create history file: {}", e.getMessage());
             }
         }
-        
+
         // Create the completer for auto-completion
         Completer completer = createCompleter();
-        
+
         // Set up the line reader with history and auto-completion
         DefaultParser parser = new DefaultParser();
         parser.setEscapeChars(null);
-        
+
         this.lineReader = LineReaderBuilder.builder()
                 .terminal(terminal)
                 .completer(completer)
@@ -132,33 +115,33 @@ public class InteractiveShell {
     public int start() {
         // Display welcome message
         printWelcome();
-        
+
         boolean running = true;
         while (running) {
             // Get current keyspace for the prompt
             String currentKeyspace = connectionManager.getCurrentKeyspace();
             String prompt = (currentKeyspace == null) ? "jcqlsh> " : "jcqlsh:" + currentKeyspace + "> ";
-            
+
             // Read line from terminal with proper prompt
             String line;
             try {
                 line = lineReader.readLine(prompt);
-                
+
                 // Handle the input
                 if (line == null) {
                     // EOF - exit the shell
                     running = false;
                     continue;
                 }
-                
+
                 // Trim the input
                 line = line.trim();
-                
+
                 // Skip empty lines
                 if (line.isEmpty()) {
                     continue;
                 }
-                
+
                 // Handle special commands
                 if (isSpecialCommand(line)) {
                     boolean shouldContinue = handleSpecialCommand(line);
@@ -180,7 +163,7 @@ public class InteractiveShell {
                 logger.error("Error in command loop", e);
             }
         }
-        
+
         // Goodbye message
         terminal.writer().println("Goodbye!");
         return 0;
@@ -194,7 +177,7 @@ public class InteractiveShell {
     private Completer createCompleter() {
         // Create completers for CQL keywords
         Completer keywordCompleter = new StringsCompleter(CQL_KEYWORDS);
-        
+
         // Create a dynamic completer for keyspaces
         Completer keyspaceCompleter = (LineReader reader, ParsedLine line, List<Candidate> candidates) -> {
             try {
@@ -204,7 +187,7 @@ public class InteractiveShell {
                 logger.warn("Error retrieving keyspaces for completion", e);
             }
         };
-        
+
         // Create a dynamic completer for tables in the current keyspace
         Completer tableCompleter = (LineReader reader, ParsedLine line, List<Candidate> candidates) -> {
             try {
@@ -217,13 +200,13 @@ public class InteractiveShell {
                 logger.warn("Error retrieving tables for completion", e);
             }
         };
-        
+
         // Create a completer for special commands
         Completer specialCommandCompleter = new StringsCompleter(
                 "HELP", "QUIT", "EXIT", "CLEAR", "DESCRIBE", "DESC", "USE",
                 "COPY", "SOURCE", "CAPTURE", "TRACING", "EXPAND", "CONSISTENCY"
         );
-        
+
         // Combine all completers
         return new AggregateCompleter(
                 keywordCompleter,
@@ -242,16 +225,16 @@ public class InteractiveShell {
         commandRegistry.register("EXIT", args -> false);
         commandRegistry.register("QUIT", args -> false);
         commandRegistry.register("CLEAR", this::handleClear);
-        
+
         // Database and schema commands
         commandRegistry.register("USE", this::handleUse);
         commandRegistry.register("DESCRIBE", this::handleDescribe);
         commandRegistry.register("DESC", this::handleDescribe);
-        
+
         // Output formatting commands
         commandRegistry.register("EXPAND", this::handleExpand);
         commandRegistry.register("TRACING", this::handleTracing);
-        
+
         // File operations
         commandRegistry.register("SOURCE", this::handleSource);
         commandRegistry.register("CAPTURE", this::handleCapture);
@@ -278,7 +261,7 @@ public class InteractiveShell {
         String[] parts = line.split("\\s+", 2);
         String command = parts[0].toUpperCase();
         String args = parts.length > 1 ? parts[1] : "";
-        
+
         return commandRegistry.execute(command, args);
     }
 
@@ -292,13 +275,13 @@ public class InteractiveShell {
             long startTime = System.currentTimeMillis();
             ResultSet resultSet = connectionManager.execute(cql);
             long endTime = System.currentTimeMillis();
-            
+
             // Format and display the results
             ResultFormatter formatter = formatterFactory.createFormatter(resultSet);
             String formattedResult = formatter.format(resultSet);
-            
+
             terminal.writer().println(formattedResult);
-            
+
             // Show execution time if applicable
             if (resultSet.getExecutionInfo() != null) {
                 terminal.writer().printf("(%d rows in %.3f sec)%n", 
@@ -317,7 +300,7 @@ public class InteractiveShell {
     private void printWelcome() {
         terminal.writer().println("Java CQL Shell (JCqlsh) v1.0.0");
         terminal.writer().println("Type 'help' for help, 'quit' to exit.");
-        
+
         // Display connection information
         try {
             String clusterName = connectionManager.execute("SELECT cluster_name FROM system.local").one().getString("cluster_name");
@@ -328,7 +311,7 @@ public class InteractiveShell {
         } catch (Exception e) {
             logger.warn("Could not get cluster name", e);
         }
-        
+
         terminal.writer().println();
     }
 
@@ -399,7 +382,7 @@ public class InteractiveShell {
             terminal.writer().println("ERROR: Keyspace name required");
             return true;
         }
-        
+
         try {
             connectionManager.useKeyspace(keyspaceName.trim());
             terminal.writer().printf("Now using keyspace %s%n", keyspaceName.trim());
@@ -432,12 +415,12 @@ public class InteractiveShell {
         } else if (args.toUpperCase().startsWith("KEYSPACE") || args.toUpperCase().startsWith("KEYSPACES")) {
             String[] parts = args.split("\\s+", 2);
             String keyspaceName = parts.length > 1 ? parts[1] : connectionManager.getCurrentKeyspace();
-            
+
             if (keyspaceName == null) {
                 terminal.writer().println("ERROR: No keyspace specified and not connected to a keyspace");
                 return true;
             }
-            
+
             // Describe the specified keyspace
             try {
                 ResultSet results = connectionManager.execute("SELECT * FROM system_schema.keyspaces WHERE keyspace_name = '" + keyspaceName + "'");
@@ -445,10 +428,10 @@ public class InteractiveShell {
                     terminal.writer().printf("ERROR: Keyspace '%s' does not exist%n", keyspaceName);
                     return true;
                 }
-                
+
                 ResultSet tableResults = connectionManager.execute(
                         "SELECT table_name FROM system_schema.tables WHERE keyspace_name = '" + keyspaceName + "'");
-                
+
                 terminal.writer().printf("Keyspace %s%n", keyspaceName);
                 terminal.writer().println("Tables:");
                 tableResults.forEach(row -> {
@@ -464,15 +447,15 @@ public class InteractiveShell {
                 terminal.writer().println("ERROR: Table name required");
                 return true;
             }
-            
+
             String tableName = parts[1];
             String keyspaceName = connectionManager.getCurrentKeyspace();
-            
+
             if (keyspaceName == null) {
                 terminal.writer().println("ERROR: Not connected to a keyspace");
                 return true;
             }
-            
+
             // Describe the specified table
             try {
                 // Get table schema
@@ -481,15 +464,15 @@ public class InteractiveShell {
                     terminal.writer().printf("ERROR: Table '%s' does not exist%n", tableName);
                     return true;
                 }
-                
+
                 terminal.writer().printf("Table %s.%s%n", keyspaceName, tableName);
-                
+
                 // Display columns and their types
                 terminal.writer().println("Columns:");
                 tableMetadata.getColumns().forEach((name, column) -> {
                     terminal.writer().printf("  %-20s %s%n", name, column.getType());
                 });
-                
+
                 // Display primary key
                 terminal.writer().println("Primary Key:");
                 terminal.writer().println("  " + tableMetadata.getPrimaryKey().stream()
@@ -560,56 +543,56 @@ public class InteractiveShell {
             terminal.writer().println("ERROR: File name required");
             return true;
         }
-        
+
         File file = new File(args.trim());
         if (!file.exists() || !file.isFile() || !file.canRead()) {
             terminal.writer().printf("ERROR: Cannot read file '%s'%n", args);
             return true;
         }
-        
+
         try {
             terminal.writer().printf("Executing commands from '%s'%n", file.getPath());
-            
+
             List<String> lines = Files.readAllLines(file.toPath());
             StringBuilder commandBuilder = new StringBuilder();
-            
+
             for (String line : lines) {
                 line = line.trim();
-                
+
                 // Skip empty lines and comments
                 if (line.isEmpty() || line.startsWith("--") || line.startsWith("//")) {
                     continue;
                 }
-                
+
                 commandBuilder.append(line).append(" ");
-                
+
                 // If the line ends with a semicolon, execute the statement
                 if (line.endsWith(";")) {
                     String command = commandBuilder.toString().trim();
                     terminal.writer().printf("> %s%n", command);
-                    
+
                     if (isSpecialCommand(command)) {
                         handleSpecialCommand(command);
                     } else {
                         executeCql(command);
                     }
-                    
+
                     commandBuilder = new StringBuilder();
                 }
             }
-            
+
             // Execute any remaining command
             String remainingCommand = commandBuilder.toString().trim();
             if (!remainingCommand.isEmpty()) {
                 terminal.writer().printf("> %s%n", remainingCommand);
-                
+
                 if (isSpecialCommand(remainingCommand)) {
                     handleSpecialCommand(remainingCommand);
                 } else {
                     executeCql(remainingCommand);
                 }
             }
-            
+
             terminal.writer().println("File execution completed.");
         } catch (IOException e) {
             terminal.writer().printf("ERROR: Could not read file '%s': %s%n", file.getPath(), e.getMessage());
@@ -618,7 +601,7 @@ public class InteractiveShell {
             terminal.writer().printf("ERROR: Error executing file '%s': %s%n", file.getPath(), e.getMessage());
             logger.error("File execution error", e);
         }
-        
+
         return true;
     }
 
@@ -642,10 +625,10 @@ public class InteractiveShell {
         interface CommandHandler {
             boolean handle(String args);
         }
-        
+
         // Map of commands to their handlers
         private final Map<String, CommandHandler> commands = new HashMap<>();
-        
+
         /**
          * Registers a command with a handler.
          *
@@ -655,7 +638,7 @@ public class InteractiveShell {
         public void register(String command, CommandHandler handler) {
             commands.put(command.toUpperCase(), handler);
         }
-        
+
         /**
          * Checks if a command is registered.
          *
@@ -665,7 +648,7 @@ public class InteractiveShell {
         public boolean isRegistered(String command) {
             return commands.containsKey(command.toUpperCase());
         }
-        
+
         /**
          * Executes a command with the given arguments.
          *

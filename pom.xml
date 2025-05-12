@@ -132,9 +132,6 @@
                 <version>3.2.2</version>
                 <configuration>
                     <argLine>--enable-preview</argLine>
-                    <jdkToolchain>
-                        <version>24</version>
-                    </jdkToolchain>
                 </configuration>
             </plugin>
             <plugin>
