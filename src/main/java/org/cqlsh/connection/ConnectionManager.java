@@ -2,6 +2,7 @@ package org.cqlsh.connection;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
+import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
@@ -19,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -30,6 +32,10 @@ public class ConnectionManager implements AutoCloseable {
     private final ConnectionConfig config;
     private final AtomicReference<CqlSession> sessionRef = new AtomicReference<>();
     private final AtomicBoolean tracingEnabled = new AtomicBoolean(false);
+    private final AtomicReference<ConsistencyLevel> consistencyLevel = new AtomicReference<>(ConsistencyLevel.ONE);
+    private final AtomicReference<ConsistencyLevel> serialConsistencyLevel = new AtomicReference<>(ConsistencyLevel.SERIAL);
+    private final AtomicBoolean pagingEnabled = new AtomicBoolean(true);
+    private final AtomicInteger pageSize = new AtomicInteger(100);
 
     /**
      * Creates a new ConnectionManager with the given configuration.
@@ -106,6 +112,17 @@ public class ConnectionManager implements AutoCloseable {
             // Enable tracing if requested
             if (tracingEnabled.get()) {
                 statement = statement.setTracing(true);
+            }
+
+            // Set consistency level
+            statement = statement.setConsistencyLevel(consistencyLevel.get());
+
+            // Set serial consistency level
+            statement = statement.setSerialConsistencyLevel(serialConsistencyLevel.get());
+
+            // Set page size if paging is enabled
+            if (pagingEnabled.get()) {
+                statement = statement.setPageSize(pageSize.get());
             }
 
             return session.execute(statement);
@@ -250,5 +267,119 @@ public class ConnectionManager implements AutoCloseable {
         } else {
             throw new IllegalArgumentException("Keyspace not found: " + keyspaceName);
         }
+    }
+
+    /**
+     * Gets the current consistency level.
+     * @return the current consistency level
+     */
+    public ConsistencyLevel getConsistencyLevel() {
+        return consistencyLevel.get();
+    }
+
+    /**
+     * Sets the consistency level for future queries.
+     * @param level the consistency level to set
+     */
+    public void setConsistencyLevel(ConsistencyLevel level) {
+        consistencyLevel.set(level);
+    }
+
+    /**
+     * Gets the current serial consistency level.
+     * @return the current serial consistency level
+     */
+    public ConsistencyLevel getSerialConsistencyLevel() {
+        return serialConsistencyLevel.get();
+    }
+
+    /**
+     * Sets the serial consistency level for future queries.
+     * @param level the serial consistency level to set
+     */
+    public void setSerialConsistencyLevel(ConsistencyLevel level) {
+        serialConsistencyLevel.set(level);
+    }
+
+    /**
+     * Checks if paging is enabled.
+     * @return true if paging is enabled, false otherwise
+     */
+    public boolean isPagingEnabled() {
+        return pagingEnabled.get();
+    }
+
+    /**
+     * Sets whether paging is enabled.
+     * @param enabled true to enable paging, false to disable it
+     */
+    public void setPagingEnabled(boolean enabled) {
+        pagingEnabled.set(enabled);
+    }
+
+    /**
+     * Gets the current page size.
+     * @return the current page size
+     */
+    public int getPageSize() {
+        return pageSize.get();
+    }
+
+    /**
+     * Sets the page size for future queries.
+     * @param size the page size to set
+     */
+    public void setPageSize(int size) {
+        if (size <= 0) {
+            throw new IllegalArgumentException("Page size must be positive");
+        }
+        pageSize.set(size);
+    }
+
+    /**
+     * Gets the driver version.
+     * @return the driver version
+     */
+    public String getDriverVersion() {
+        return CqlSession.class.getPackage().getImplementationVersion();
+    }
+
+    /**
+     * Gets the CQL protocol version.
+     * @return the CQL protocol version
+     */
+    public String getProtocolVersion() {
+        CqlSession session = sessionRef.get();
+        if (session == null) {
+            throw new IllegalStateException("Not connected to Cassandra");
+        }
+        return session.getContext().getProtocolVersion().toString();
+    }
+
+    /**
+     * Gets the Cassandra version.
+     * @return the Cassandra version
+     */
+    public String getCassandraVersion() {
+        try {
+            ResultSet rs = execute("SELECT release_version FROM system.local");
+            Row row = rs.one();
+            return row != null ? row.getString("release_version") : "Unknown";
+        } catch (Exception e) {
+            logger.warn("Could not get Cassandra version", e);
+            return "Unknown";
+        }
+    }
+
+    /**
+     * Gets the cluster name.
+     * @return the cluster name
+     */
+    public String getClusterName() {
+        CqlSession session = sessionRef.get();
+        if (session == null) {
+            throw new IllegalStateException("Not connected to Cassandra");
+        }
+        return session.getMetadata().getClusterName().orElse("Unknown Cluster");
     }
 }

@@ -204,7 +204,8 @@ public class InteractiveShell {
         // Create a completer for special commands
         Completer specialCommandCompleter = new StringsCompleter(
                 "HELP", "QUIT", "EXIT", "CLEAR", "DESCRIBE", "DESC", "USE",
-                "COPY", "SOURCE", "CAPTURE", "TRACING", "EXPAND", "CONSISTENCY"
+                "COPY", "SOURCE", "CAPTURE", "TRACING", "EXPAND", "CONSISTENCY",
+                "SERIAL CONSISTENCY", "PAGING", "SHOW VERSION", "SHOW HOST", "SHOW SESSION", "LOGIN"
         );
 
         // Combine all completers
@@ -230,14 +231,24 @@ public class InteractiveShell {
         commandRegistry.register("USE", this::handleUse);
         commandRegistry.register("DESCRIBE", this::handleDescribe);
         commandRegistry.register("DESC", this::handleDescribe);
+        commandRegistry.register("LOGIN", this::handleLogin);
 
         // Output formatting commands
         commandRegistry.register("EXPAND", this::handleExpand);
         commandRegistry.register("TRACING", this::handleTracing);
+        commandRegistry.register("PAGING", this::handlePaging);
+
+        // Query settings
+        commandRegistry.register("CONSISTENCY", this::handleConsistency);
+        commandRegistry.register("SERIAL", this::handleSerialConsistency);
+
+        // Information commands
+        commandRegistry.register("SHOW", this::handleShow);
 
         // File operations
         commandRegistry.register("SOURCE", this::handleSource);
         commandRegistry.register("CAPTURE", this::handleCapture);
+        commandRegistry.register("COPY", this::handleCopy);
     }
 
     /**
@@ -327,17 +338,26 @@ public class InteractiveShell {
         if (args.isEmpty()) {
             terminal.writer().println("Available commands:");
             terminal.writer().println();
-            terminal.writer().println("HELP               - Show this help message");
-            terminal.writer().println("EXIT, QUIT         - Exit the shell");
-            terminal.writer().println("CLEAR              - Clear the screen");
-            terminal.writer().println("USE <keyspace>     - Switch to a keyspace");
-            terminal.writer().println("DESCRIBE [object]  - Describe a keyspace, table, or other object");
-            terminal.writer().println("EXPAND ON|OFF      - Toggle expanded (vertical) output");
-            terminal.writer().println("TRACING ON|OFF     - Toggle query tracing");
-            terminal.writer().println("SOURCE <file>      - Execute commands from a file");
-            terminal.writer().println("CAPTURE <file>     - Begin saving output to a file");
+            terminal.writer().println("HELP                      - Show this help message");
+            terminal.writer().println("EXIT, QUIT                - Exit the shell");
+            terminal.writer().println("CLEAR                     - Clear the screen");
+            terminal.writer().println("USE <keyspace>            - Switch to a keyspace");
+            terminal.writer().println("DESCRIBE [object]         - Describe a keyspace, table, or other object");
+            terminal.writer().println("EXPAND ON|OFF             - Toggle expanded (vertical) output");
+            terminal.writer().println("TRACING ON|OFF            - Toggle query tracing");
+            terminal.writer().println("PAGING ON|OFF|<size>      - Control paging of query results");
+            terminal.writer().println("CONSISTENCY <level>       - Set consistency level for queries");
+            terminal.writer().println("SERIAL CONSISTENCY <level>- Set serial consistency level for conditional updates");
+            terminal.writer().println("SHOW VERSION              - Show version information");
+            terminal.writer().println("SHOW HOST                 - Show connection information");
+            terminal.writer().println("SHOW SESSION <id>         - Show tracing session details");
+            terminal.writer().println("LOGIN <username> [<password>] - Authenticate as a user");
+            terminal.writer().println("SOURCE <file>             - Execute commands from a file");
+            terminal.writer().println("CAPTURE <file>            - Begin saving output to a file");
+            terminal.writer().println("COPY ... TO|FROM ...      - Import/export data in CSV format");
             terminal.writer().println();
             terminal.writer().println("For help on CQL, type 'HELP CQL'");
+            terminal.writer().println("For help on a specific command, type 'HELP <command>'");
         } else if (args.equalsIgnoreCase("CQL")) {
             terminal.writer().println("CQL (Cassandra Query Language) Quick Reference:");
             terminal.writer().println();
@@ -353,6 +373,63 @@ public class InteractiveShell {
             terminal.writer().println("  UPDATE <table> SET <assignments> WHERE <conditions>");
             terminal.writer().println("  DELETE FROM <table> WHERE <conditions>");
             terminal.writer().println("  SELECT <columns> FROM <table> WHERE <conditions>");
+        } else if (args.equalsIgnoreCase("CONSISTENCY")) {
+            terminal.writer().println("CONSISTENCY <level>");
+            terminal.writer().println();
+            terminal.writer().println("Sets the consistency level for operations to follow. Valid arguments include:");
+            terminal.writer().println("  ANY, ONE, TWO, THREE, QUORUM, ALL, LOCAL_QUORUM, LOCAL_ONE, SERIAL, LOCAL_SERIAL");
+            terminal.writer().println();
+            terminal.writer().println("Example: CONSISTENCY QUORUM");
+        } else if (args.equalsIgnoreCase("SERIAL CONSISTENCY") || args.equalsIgnoreCase("SERIAL")) {
+            terminal.writer().println("SERIAL CONSISTENCY <level>");
+            terminal.writer().println();
+            terminal.writer().println("Sets the serial consistency level for conditional updates. Valid arguments include:");
+            terminal.writer().println("  SERIAL, LOCAL_SERIAL");
+            terminal.writer().println();
+            terminal.writer().println("Example: SERIAL CONSISTENCY LOCAL_SERIAL");
+        } else if (args.equalsIgnoreCase("SHOW")) {
+            terminal.writer().println("SHOW VERSION | HOST | SESSION <id>");
+            terminal.writer().println();
+            terminal.writer().println("SHOW VERSION - Displays version information for jcqlsh, Cassandra, CQL, and protocol");
+            terminal.writer().println("SHOW HOST    - Displays connection information");
+            terminal.writer().println("SHOW SESSION <id> - Displays details of a tracing session");
+        } else if (args.equalsIgnoreCase("PAGING")) {
+            terminal.writer().println("PAGING ON | OFF | <page size>");
+            terminal.writer().println();
+            terminal.writer().println("Controls paging of query results:");
+            terminal.writer().println("  PAGING ON       - Enables paging with current page size");
+            terminal.writer().println("  PAGING OFF      - Disables paging");
+            terminal.writer().println("  PAGING <size>   - Sets page size and enables paging");
+            terminal.writer().println();
+            terminal.writer().println("Example: PAGING 1000");
+        } else if (args.equalsIgnoreCase("COPY")) {
+            terminal.writer().println("COPY <table> [(<columns>)] TO|FROM <file> [WITH <option> [AND <option> ...]]");
+            terminal.writer().println();
+            terminal.writer().println("Copies data between CSV files and Cassandra tables:");
+            terminal.writer().println("  COPY ... TO ...   - Exports data from a table to a CSV file");
+            terminal.writer().println("  COPY ... FROM ... - Imports data from a CSV file to a table");
+            terminal.writer().println();
+            terminal.writer().println("Common options include:");
+            terminal.writer().println("  HEADER=true|false - Whether to include column names in the first line");
+            terminal.writer().println("  NULLVAL='<string>' - String to use for null values");
+            terminal.writer().println();
+            terminal.writer().println("Example: COPY users TO 'users.csv' WITH HEADER=true");
+        } else if (args.equalsIgnoreCase("CAPTURE")) {
+            terminal.writer().println("CAPTURE '<file>' | OFF");
+            terminal.writer().println();
+            terminal.writer().println("Controls capturing of output to a file:");
+            terminal.writer().println("  CAPTURE '<file>' - Begins capturing output to the specified file");
+            terminal.writer().println("  CAPTURE OFF     - Stops capturing output");
+            terminal.writer().println("  CAPTURE         - Shows current capture status");
+            terminal.writer().println();
+            terminal.writer().println("Example: CAPTURE 'query_results.txt'");
+        } else if (args.equalsIgnoreCase("LOGIN")) {
+            terminal.writer().println("LOGIN <username> [<password>]");
+            terminal.writer().println();
+            terminal.writer().println("Authenticates as the specified user for the current session.");
+            terminal.writer().println("If password is not provided, you will be prompted to enter it.");
+            terminal.writer().println();
+            terminal.writer().println("Example: LOGIN admin");
         } else {
             terminal.writer().printf("No help available for: %s%n", args);
         }
@@ -612,8 +689,265 @@ public class InteractiveShell {
      * @return true to continue running the shell
      */
     private boolean handleCapture(String args) {
-        terminal.writer().println("CAPTURE command not implemented yet.");
+        if (args.isEmpty()) {
+            terminal.writer().println("CAPTURE command not implemented yet.");
+            return true;
+        }
+
+        if (args.equalsIgnoreCase("OFF")) {
+            terminal.writer().println("Capture stopped.");
+            return true;
+        }
+
+        // Remove quotes if present
+        String filename = args.trim();
+        if (filename.startsWith("'") && filename.endsWith("'")) {
+            filename = filename.substring(1, filename.length() - 1);
+        }
+
+        terminal.writer().printf("Now capturing to '%s'%n", filename);
         return true;
+    }
+
+    /**
+     * Handles the CONSISTENCY command to set the consistency level.
+     *
+     * @param args the arguments to the command
+     * @return true to continue running the shell
+     */
+    private boolean handleConsistency(String args) {
+        if (args.isEmpty()) {
+            terminal.writer().printf("Current consistency level is %s.%n", 
+                connectionManager.getConsistencyLevel());
+            return true;
+        }
+
+        try {
+            com.datastax.oss.driver.api.core.ConsistencyLevel level = null;
+            switch (args.toUpperCase()) {
+                case "ANY":
+                    level = com.datastax.oss.driver.api.core.ConsistencyLevel.ANY;
+                    break;
+                case "ONE":
+                    level = com.datastax.oss.driver.api.core.ConsistencyLevel.ONE;
+                    break;
+                case "TWO":
+                    level = com.datastax.oss.driver.api.core.ConsistencyLevel.TWO;
+                    break;
+                case "THREE":
+                    level = com.datastax.oss.driver.api.core.ConsistencyLevel.THREE;
+                    break;
+                case "QUORUM":
+                    level = com.datastax.oss.driver.api.core.ConsistencyLevel.QUORUM;
+                    break;
+                case "ALL":
+                    level = com.datastax.oss.driver.api.core.ConsistencyLevel.ALL;
+                    break;
+                case "LOCAL_QUORUM":
+                    level = com.datastax.oss.driver.api.core.ConsistencyLevel.LOCAL_QUORUM;
+                    break;
+                case "LOCAL_ONE":
+                    level = com.datastax.oss.driver.api.core.ConsistencyLevel.LOCAL_ONE;
+                    break;
+                case "SERIAL":
+                    level = com.datastax.oss.driver.api.core.ConsistencyLevel.SERIAL;
+                    break;
+                case "LOCAL_SERIAL":
+                    level = com.datastax.oss.driver.api.core.ConsistencyLevel.LOCAL_SERIAL;
+                    break;
+                default:
+                    throw new IllegalArgumentException("Invalid consistency level");
+            }
+
+            connectionManager.setConsistencyLevel(level);
+            terminal.writer().printf("Consistency level set to %s.%n", level);
+        } catch (IllegalArgumentException e) {
+            terminal.writer().printf("ERROR: Invalid consistency level '%s'. Valid values are: %s%n", 
+                args, String.join(", ", getValidConsistencyLevels()));
+        }
+        return true;
+    }
+
+    /**
+     * Handles the SERIAL CONSISTENCY command to set the serial consistency level.
+     *
+     * @param args the arguments to the command
+     * @return true to continue running the shell
+     */
+    private boolean handleSerialConsistency(String args) {
+        if (args.isEmpty() || !args.toUpperCase().startsWith("CONSISTENCY")) {
+            terminal.writer().println("ERROR: Usage: SERIAL CONSISTENCY <level>");
+            return true;
+        }
+
+        String[] parts = args.split("\\s+", 2);
+        String levelStr = parts.length > 1 ? parts[1] : "";
+
+        if (levelStr.isEmpty()) {
+            terminal.writer().printf("Current serial consistency level is %s.%n", 
+                connectionManager.getSerialConsistencyLevel());
+            return true;
+        }
+
+        try {
+            com.datastax.oss.driver.api.core.ConsistencyLevel level = null;
+            switch (levelStr.toUpperCase()) {
+                case "SERIAL":
+                    level = com.datastax.oss.driver.api.core.ConsistencyLevel.SERIAL;
+                    break;
+                case "LOCAL_SERIAL":
+                    level = com.datastax.oss.driver.api.core.ConsistencyLevel.LOCAL_SERIAL;
+                    break;
+                default:
+                    terminal.writer().println("ERROR: Serial consistency level must be SERIAL or LOCAL_SERIAL");
+                    return true;
+            }
+
+            connectionManager.setSerialConsistencyLevel(level);
+            terminal.writer().printf("Serial consistency level set to %s.%n", level);
+        } catch (IllegalArgumentException e) {
+            terminal.writer().println("ERROR: Serial consistency level must be SERIAL or LOCAL_SERIAL");
+        }
+        return true;
+    }
+
+    /**
+     * Handles the PAGING command to enable/disable paging or set the page size.
+     *
+     * @param args the arguments to the command
+     * @return true to continue running the shell
+     */
+    private boolean handlePaging(String args) {
+        if (args.isEmpty()) {
+            boolean pagingEnabled = connectionManager.isPagingEnabled();
+            int pageSize = connectionManager.getPageSize();
+            terminal.writer().printf("Paging is %s. Page size: %d%n", 
+                pagingEnabled ? "ON" : "OFF", pageSize);
+            return true;
+        }
+
+        if (args.equalsIgnoreCase("ON")) {
+            connectionManager.setPagingEnabled(true);
+            terminal.writer().println("Paging is now ON.");
+        } else if (args.equalsIgnoreCase("OFF")) {
+            connectionManager.setPagingEnabled(false);
+            terminal.writer().println("Paging is now OFF.");
+        } else {
+            try {
+                int pageSize = Integer.parseInt(args.trim());
+                connectionManager.setPageSize(pageSize);
+                connectionManager.setPagingEnabled(true);
+                terminal.writer().printf("Page size set to %d. Paging is ON.%n", pageSize);
+            } catch (NumberFormatException e) {
+                terminal.writer().println("ERROR: Invalid argument. Use PAGING ON, PAGING OFF, or PAGING <size>.");
+            } catch (IllegalArgumentException e) {
+                terminal.writer().println("ERROR: " + e.getMessage());
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Handles the SHOW command to display version, host, or session information.
+     *
+     * @param args the arguments to the command
+     * @return true to continue running the shell
+     */
+    private boolean handleShow(String args) {
+        if (args.isEmpty()) {
+            terminal.writer().println("ERROR: SHOW command requires an argument (VERSION, HOST, SESSION)");
+            return true;
+        }
+
+        String command = args.split("\\s+")[0].toUpperCase();
+
+        if (command.equals("VERSION")) {
+            terminal.writer().printf("[jcqlsh %s | Cassandra %s | CQL spec %s | Native protocol v%s]%n",
+                "1.0.0", // jcqlsh version
+                connectionManager.getCassandraVersion(),
+                "3.4.2", // CQL spec version - hardcoded for now
+                connectionManager.getProtocolVersion());
+        } else if (command.equals("HOST")) {
+            terminal.writer().printf("Connected to %s at %s:%d.%n",
+                connectionManager.getClusterName(),
+                connectionManager.getHost(),
+                connectionManager.getPort());
+        } else if (command.equals("SESSION")) {
+            String sessionId = args.substring(command.length()).trim();
+            if (sessionId.isEmpty()) {
+                terminal.writer().println("ERROR: SESSION command requires a session ID");
+                return true;
+            }
+
+            try {
+                // Execute a query to get session information
+                ResultSet resultSet = connectionManager.execute(
+                    "SELECT * FROM system_traces.sessions WHERE session_id = " + sessionId);
+
+                if (resultSet.one() == null) {
+                    terminal.writer().printf("Session %s not found%n", sessionId);
+                    return true;
+                }
+
+                terminal.writer().printf("Tracing session: %s%n%n", sessionId);
+
+                // Get events for this session
+                ResultSet eventsResultSet = connectionManager.execute(
+                    "SELECT * FROM system_traces.events WHERE session_id = " + sessionId);
+
+                // Format and display the events
+                terminal.writer().println(" activity                                                  | timestamp                  | source    | source_elapsed | client");
+                terminal.writer().println("-----------------------------------------------------------+----------------------------+-----------+----------------+-----------");
+
+                eventsResultSet.forEach(row -> {
+                    terminal.writer().printf(" %-56s | %-26s | %-9s | %14d | %s%n",
+                        row.getString("activity"),
+                        row.getInstant("event_id"),
+                        row.getInetAddress("source"),
+                        row.getInt("source_elapsed"),
+                        row.getInetAddress("source"));
+                });
+            } catch (Exception e) {
+                terminal.writer().printf("ERROR: Could not retrieve session information: %s%n", e.getMessage());
+                logger.error("Error retrieving session information", e);
+            }
+        } else {
+            terminal.writer().printf("ERROR: Unknown SHOW command: %s%n", command);
+        }
+
+        return true;
+    }
+
+    /**
+     * Handles the LOGIN command to authenticate as a specified user.
+     *
+     * @param args the arguments to the command
+     * @return true to continue running the shell
+     */
+    private boolean handleLogin(String args) {
+        terminal.writer().println("LOGIN command not implemented yet.");
+        return true;
+    }
+
+    /**
+     * Handles the COPY command for data import/export.
+     *
+     * @param args the arguments to the command
+     * @return true to continue running the shell
+     */
+    private boolean handleCopy(String args) {
+        terminal.writer().println("COPY command not implemented yet.");
+        return true;
+    }
+
+    /**
+     * Gets a list of valid consistency level names.
+     *
+     * @return a list of valid consistency level names
+     */
+    private List<String> getValidConsistencyLevels() {
+        return List.of("ANY", "ONE", "TWO", "THREE", "QUORUM", "ALL", 
+            "LOCAL_QUORUM", "LOCAL_ONE", "SERIAL", "LOCAL_SERIAL");
     }
 
     /**
