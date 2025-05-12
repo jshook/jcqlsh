@@ -144,7 +144,9 @@ public class CqlshCommand implements Callable<Integer> {
             InteractiveShell shell = new InteractiveShell(connectionManager, formattingConfig);
             return shell.start();
         } catch (Exception e) {
+            // Only print stack trace in debug mode, otherwise just print the error message
             if (debug) {
+                System.err.println("Error (debug mode): ");
                 e.printStackTrace();
             } else {
                 System.err.println("Error: " + e.getMessage());

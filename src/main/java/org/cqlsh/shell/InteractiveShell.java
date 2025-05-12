@@ -73,6 +73,7 @@ public class InteractiveShell {
                 .name("JCqlsh")
                 .system(true)
                 .jansi(true)
+                .signalHandler(Terminal.SignalHandler.SIG_DFL)  // Use default signal handling
                 .build();
 
         // Configure the history file
@@ -92,6 +93,8 @@ public class InteractiveShell {
         // Set up the line reader with history and auto-completion
         DefaultParser parser = new DefaultParser();
         parser.setEscapeChars(null);
+        parser.setEofOnUnclosedQuote(true);  // Ensure EOF is detected even with unclosed quotes
+        parser.setEofOnEscapedNewLine(true); // Ensure EOF is detected even with escaped newlines
 
         this.lineReader = LineReaderBuilder.builder()
                 .terminal(terminal)
@@ -104,6 +107,7 @@ public class InteractiveShell {
                 .option(LineReader.Option.AUTO_GROUP, true)
                 .option(LineReader.Option.CASE_INSENSITIVE, true)
                 .option(LineReader.Option.INSERT_TAB, true)
+                .option(LineReader.Option.BRACKETED_PASTE, false)  // Disable bracketed paste to ensure EOF is properly detected
                 .build();
     }
 
@@ -271,7 +275,7 @@ public class InteractiveShell {
     private boolean handleSpecialCommand(String line) {
         String[] parts = line.split("\\s+", 2);
         String command = parts[0].toUpperCase();
-        String args = parts.length > 1 ? parts[1] : "";
+        String args = parts.length > 1 ? parts[1].trim() : "";
 
         return commandRegistry.execute(command, args);
     }
@@ -477,24 +481,40 @@ public class InteractiveShell {
      * @return true to continue running the shell
      */
     private boolean handleDescribe(String args) {
-        if (args.isEmpty() || args.equalsIgnoreCase("SCHEMA")) {
-            // Describe all keyspaces
+        // Normalize args for better matching
+        String normalizedArgs = args.trim().toUpperCase();
+
+        if (args.isEmpty() || normalizedArgs.equals("SCHEMA")) {
+            // Describe all keyspaces by directly querying system tables
             try {
-                List<String> keyspaces = connectionManager.getKeyspaces();
+                ResultSet results = connectionManager.execute("SELECT keyspace_name FROM system_schema.keyspaces");
                 terminal.writer().println("Keyspaces:");
-                for (String keyspace : keyspaces) {
-                    terminal.writer().println("  " + keyspace);
-                }
+                results.forEach(row -> {
+                    terminal.writer().println("  " + row.getString("keyspace_name"));
+                });
             } catch (Exception e) {
                 terminal.writer().println("ERROR: " + e.getMessage());
                 logger.error("Error describing schema", e);
             }
-        } else if (args.toUpperCase().startsWith("KEYSPACE") || args.toUpperCase().startsWith("KEYSPACES")) {
+        } else if (normalizedArgs.equals("KEYSPACES")) {
+            // List all keyspaces by directly querying system tables
+            try {
+                // Use system_schema.keyspaces to get keyspace information without requiring a connected keyspace
+                ResultSet results = connectionManager.execute("SELECT keyspace_name FROM system_schema.keyspaces");
+                terminal.writer().println("Keyspaces:");
+                results.forEach(row -> {
+                    terminal.writer().println("  " + row.getString("keyspace_name"));
+                });
+            } catch (Exception e) {
+                terminal.writer().println("ERROR: " + e.getMessage());
+                logger.error("Error listing keyspaces", e);
+            }
+        } else if (normalizedArgs.startsWith("KEYSPACE")) {
             String[] parts = args.split("\\s+", 2);
             String keyspaceName = parts.length > 1 ? parts[1] : connectionManager.getCurrentKeyspace();
 
             if (keyspaceName == null) {
-                terminal.writer().println("ERROR: No keyspace specified and not connected to a keyspace");
+                terminal.writer().println("ERROR: No keyspace specified and not connected to a keyspace. Please specify a keyspace name.");
                 return true;
             }
 
@@ -518,25 +538,37 @@ public class InteractiveShell {
                 terminal.writer().println("ERROR: " + e.getMessage());
                 logger.error("Error describing keyspace", e);
             }
-        } else if (args.toUpperCase().startsWith("TABLE") || args.toUpperCase().startsWith("TABLES")) {
+        } else if (normalizedArgs.startsWith("TABLE") || normalizedArgs.startsWith("TABLES")) {
             String[] parts = args.split("\\s+", 2);
             if (parts.length < 2) {
                 terminal.writer().println("ERROR: Table name required");
                 return true;
             }
 
-            String tableName = parts[1];
-            String keyspaceName = connectionManager.getCurrentKeyspace();
+            String tableSpec = parts[1];
+            String keyspaceName;
+            String tableName;
 
-            if (keyspaceName == null) {
-                terminal.writer().println("ERROR: Not connected to a keyspace");
-                return true;
+            // Check if the table name is fully qualified (contains a dot)
+            if (tableSpec.contains(".")) {
+                String[] tableSpecParts = tableSpec.split("\\.", 2);
+                keyspaceName = tableSpecParts[0];
+                tableName = tableSpecParts[1];
+            } else {
+                tableName = tableSpec;
+                keyspaceName = connectionManager.getCurrentKeyspace();
+
+                if (keyspaceName == null) {
+                    terminal.writer().println("ERROR: Not connected to a keyspace. Please specify a fully qualified table name (keyspace.table)");
+                    return true;
+                }
             }
 
             // Describe the specified table
             try {
                 // Get table schema
-                TableMetadata tableMetadata = connectionManager.getTableMetadata(tableName);
+                String tableSpecToUse = tableSpec.contains(".") ? tableSpec : tableName;
+                TableMetadata tableMetadata = connectionManager.getTableMetadata(tableSpecToUse);
                 if (tableMetadata == null) {
                     terminal.writer().printf("ERROR: Table '%s' does not exist%n", tableName);
                     return true;

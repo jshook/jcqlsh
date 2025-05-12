@@ -107,7 +107,32 @@ public class ConnectionManager implements AutoCloseable {
         }
 
         try {
+            // Create the statement
             SimpleStatement statement = SimpleStatement.newInstance(cql);
+
+            // Check if this is a system query (querying system tables)
+            boolean isSystemQuery = cql.toLowerCase().contains("system_schema.") || 
+                                   cql.toLowerCase().contains("system.") ||
+                                   cql.toLowerCase().contains("system_traces.");
+
+            // Check if the query contains a fully qualified table name (keyspace.table)
+            boolean hasFullyQualifiedName = cql.matches("(?i).*\\b[a-zA-Z0-9_]+\\.[a-zA-Z0-9_]+\\b.*");
+
+            // For system queries or queries with fully qualified table names, 
+            // we don't need to check if a keyspace is connected
+            if (isSystemQuery) {
+                // For system queries, explicitly set the keyspace to the appropriate system keyspace
+                if (cql.toLowerCase().contains("system_schema.")) {
+                    statement = statement.setKeyspace("system_schema");
+                } else if (cql.toLowerCase().contains("system.")) {
+                    statement = statement.setKeyspace("system");
+                } else if (cql.toLowerCase().contains("system_traces.")) {
+                    statement = statement.setKeyspace("system_traces");
+                }
+            } else if (hasFullyQualifiedName && getCurrentKeyspace() == null) {
+                // For queries with fully qualified table names and no current keyspace,
+                // we don't need to set a keyspace - the driver will handle it
+            }
 
             // Enable tracing if requested
             if (tracingEnabled.get()) {
@@ -238,20 +263,31 @@ public class ConnectionManager implements AutoCloseable {
     }
 
     /**
-     * Gets the table metadata for the specified table in the current keyspace.
-     * @param tableName the table name
+     * Gets the table metadata for the specified table.
+     * @param tableSpec the table name or fully qualified table name (keyspace.table)
      * @return the table metadata
      * @throws IllegalArgumentException if the table is not found
      */
-    public TableMetadata getTableMetadata(String tableName) {
+    public TableMetadata getTableMetadata(String tableSpec) {
         CqlSession session = sessionRef.get();
         if (session == null) {
             throw new IllegalStateException("Not connected to Cassandra");
         }
 
-        String keyspaceName = getCurrentKeyspace();
-        if (keyspaceName == null) {
-            throw new IllegalStateException("Not connected to a keyspace");
+        String keyspaceName;
+        String tableName;
+
+        // Check if the table name is fully qualified (contains a dot)
+        if (tableSpec.contains(".")) {
+            String[] parts = tableSpec.split("\\.", 2);
+            keyspaceName = parts[0];
+            tableName = parts[1];
+        } else {
+            tableName = tableSpec;
+            keyspaceName = getCurrentKeyspace();
+            if (keyspaceName == null) {
+                throw new IllegalStateException("Not connected to a keyspace and no keyspace specified in table name");
+            }
         }
 
         Metadata metadata = session.getMetadata();
@@ -262,7 +298,7 @@ public class ConnectionManager implements AutoCloseable {
             if (table.isPresent()) {
                 return table.get();
             } else {
-                throw new IllegalArgumentException("Table not found: " + tableName);
+                throw new IllegalArgumentException("Table not found: " + tableName + " in keyspace " + keyspaceName);
             }
         } else {
             throw new IllegalArgumentException("Keyspace not found: " + keyspaceName);
