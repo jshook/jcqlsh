@@ -262,6 +262,10 @@ public class InteractiveShell {
      * @return true if the input line is a special command, false otherwise
      */
     private boolean isSpecialCommand(String line) {
+        // Remove trailing semicolon if present
+        if (line.endsWith(";")) {
+            line = line.substring(0, line.length() - 1).trim();
+        }
         String command = line.split("\\s+")[0].toUpperCase();
         return commandRegistry.isRegistered(command);
     }
@@ -273,6 +277,11 @@ public class InteractiveShell {
      * @return true if the shell should continue running, false if it should exit
      */
     private boolean handleSpecialCommand(String line) {
+        // Remove trailing semicolon if present
+        if (line.endsWith(";")) {
+            line = line.substring(0, line.length() - 1).trim();
+        }
+
         String[] parts = line.split("\\s+", 2);
         String command = parts[0].toUpperCase();
         String args = parts.length > 1 ? parts[1].trim() : "";
@@ -520,20 +529,69 @@ public class InteractiveShell {
 
             // Describe the specified keyspace
             try {
-                ResultSet results = connectionManager.execute("SELECT * FROM system_schema.keyspaces WHERE keyspace_name = '" + keyspaceName + "'");
-                if (results.one() == null) {
+                ResultSet keyspaceResults = connectionManager.execute(
+                        "SELECT * FROM system_schema.keyspaces WHERE keyspace_name = '" + keyspaceName + "'");
+
+                if (keyspaceResults.one() == null) {
                     terminal.writer().printf("ERROR: Keyspace '%s' does not exist%n", keyspaceName);
                     return true;
                 }
 
+                // Get keyspace details for CREATE KEYSPACE statement
+                ResultSet replicationResults = connectionManager.execute(
+                        "SELECT replication, durable_writes FROM system_schema.keyspaces WHERE keyspace_name = '" + keyspaceName + "'");
+
+                var row = replicationResults.one();
+                Map<String, String> replication = row.getMap("replication", String.class, String.class);
+                boolean durableWrites = row.getBoolean("durable_writes");
+
+                // Build CREATE KEYSPACE statement
+                StringBuilder createKeyspaceStmt = new StringBuilder();
+                createKeyspaceStmt.append("CREATE KEYSPACE ").append(keyspaceName).append(" WITH REPLICATION = {");
+
+                // Add replication options
+                boolean first = true;
+                for (Map.Entry<String, String> entry : replication.entrySet()) {
+                    if (!first) {
+                        createKeyspaceStmt.append(", ");
+                    }
+                    createKeyspaceStmt.append("'").append(entry.getKey()).append("': ");
+
+                    // Check if the value is numeric
+                    if (entry.getValue().matches("\\d+")) {
+                        createKeyspaceStmt.append(entry.getValue());
+                    } else {
+                        createKeyspaceStmt.append("'").append(entry.getValue()).append("'");
+                    }
+
+                    first = false;
+                }
+
+                createKeyspaceStmt.append("}");
+
+                // Add durable_writes if it's false (true is default)
+                if (!durableWrites) {
+                    createKeyspaceStmt.append(" AND DURABLE_WRITES = false");
+                }
+
+                createKeyspaceStmt.append(";");
+
+                // Print the CREATE KEYSPACE statement
+                terminal.writer().println(createKeyspaceStmt.toString());
+                terminal.writer().println();
+
+                // Get tables in the keyspace
                 ResultSet tableResults = connectionManager.execute(
                         "SELECT table_name FROM system_schema.tables WHERE keyspace_name = '" + keyspaceName + "'");
 
-                terminal.writer().printf("Keyspace %s%n", keyspaceName);
-                terminal.writer().println("Tables:");
-                tableResults.forEach(row -> {
-                    terminal.writer().println("  " + row.getString("table_name"));
-                });
+                if (tableResults.getAvailableWithoutFetching() > 0) {
+                    terminal.writer().println("Tables:");
+                    tableResults.forEach(tableRow -> {
+                        terminal.writer().println("  " + tableRow.getString("table_name"));
+                    });
+                } else {
+                    terminal.writer().println("No tables found in keyspace.");
+                }
             } catch (Exception e) {
                 terminal.writer().println("ERROR: " + e.getMessage());
                 logger.error("Error describing keyspace", e);
@@ -574,19 +632,103 @@ public class InteractiveShell {
                     return true;
                 }
 
-                terminal.writer().printf("Table %s.%s%n", keyspaceName, tableName);
+                // Build CREATE TABLE statement
+                StringBuilder createTableStmt = new StringBuilder();
+                createTableStmt.append("CREATE TABLE ").append(keyspaceName).append(".").append(tableName).append(" (\n");
 
-                // Display columns and their types
-                terminal.writer().println("Columns:");
+                // Add column definitions
+                List<String> columnDefs = new ArrayList<>();
                 tableMetadata.getColumns().forEach((name, column) -> {
-                    terminal.writer().printf("  %-20s %s%n", name, column.getType());
+                    String columnDef = "    " + name + " " + column.getType();
+                    if (column.isStatic()) {
+                        columnDef += " STATIC";
+                    }
+                    columnDefs.add(columnDef);
                 });
 
-                // Display primary key
-                terminal.writer().println("Primary Key:");
-                terminal.writer().println("  " + tableMetadata.getPrimaryKey().stream()
+                // Add primary key definition
+                StringBuilder primaryKeyDef = new StringBuilder("    PRIMARY KEY (");
+
+                // Get partition key columns
+                List<String> partitionKeyColumns = tableMetadata.getPartitionKey().stream()
                         .map(col -> col.getName().asInternal())
-                        .collect(Collectors.joining(", ")));
+                        .collect(Collectors.toList());
+
+                // Get clustering key columns
+                List<String> clusteringKeyColumns = tableMetadata.getClusteringColumns().keySet().stream()
+                        .map(col -> col.getName().asInternal())
+                        .collect(Collectors.toList());
+
+                // Format primary key based on whether it's a composite key or not
+                if (partitionKeyColumns.size() > 1) {
+                    // Composite partition key
+                    primaryKeyDef.append("(")
+                            .append(String.join(", ", partitionKeyColumns))
+                            .append(")");
+                } else {
+                    // Simple partition key
+                    primaryKeyDef.append(partitionKeyColumns.get(0));
+                }
+
+                // Add clustering columns if any
+                if (!clusteringKeyColumns.isEmpty()) {
+                    primaryKeyDef.append(", ")
+                            .append(String.join(", ", clusteringKeyColumns));
+                }
+
+                primaryKeyDef.append(")");
+                columnDefs.add(primaryKeyDef.toString());
+
+                // Join all column definitions
+                createTableStmt.append(String.join(",\n", columnDefs));
+
+                // Add table options if any
+                Map<String, String> options = new HashMap<>();
+
+                // Get clustering order if specified
+                if (!clusteringKeyColumns.isEmpty()) {
+                    StringBuilder clusteringOrder = new StringBuilder("CLUSTERING ORDER BY (");
+                    List<String> clusteringOrderParts = new ArrayList<>();
+
+                    tableMetadata.getClusteringColumns().forEach((column, order) -> {
+                        String direction = order == com.datastax.oss.driver.api.core.metadata.schema.ClusteringOrder.DESC ? "DESC" : "ASC";
+                        clusteringOrderParts.add(column.getName().asInternal() + " " + direction);
+                    });
+
+                    clusteringOrder.append(String.join(", ", clusteringOrderParts)).append(")");
+                    options.put("CLUSTERING ORDER", clusteringOrder.toString());
+                }
+
+                // Add compact storage if applicable
+                if (tableMetadata.isCompactStorage()) {
+                    options.put("COMPACT STORAGE", "");
+                }
+
+                // Add other table options
+                // Note: This is a simplified version, you may need to add more options based on your requirements
+
+                // Append options to CREATE TABLE statement
+                if (!options.isEmpty()) {
+                    createTableStmt.append("\n) WITH ");
+                    List<String> optionsList = new ArrayList<>();
+
+                    options.forEach((key, value) -> {
+                        if (value.isEmpty()) {
+                            optionsList.add(key);
+                        } else {
+                            optionsList.add(key + " = " + value);
+                        }
+                    });
+
+                    createTableStmt.append(String.join(" AND ", optionsList));
+                } else {
+                    createTableStmt.append("\n)");
+                }
+
+                createTableStmt.append(";");
+
+                // Print the CREATE TABLE statement
+                terminal.writer().println(createTableStmt.toString());
             } catch (Exception e) {
                 terminal.writer().println("ERROR: " + e.getMessage());
                 logger.error("Error describing table", e);

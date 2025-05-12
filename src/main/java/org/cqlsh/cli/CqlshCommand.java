@@ -6,6 +6,7 @@ import org.cqlsh.config.OutputFormat;
 import org.cqlsh.connection.ConnectionManager;
 import org.cqlsh.script.ScriptExecutor;
 import org.cqlsh.shell.InteractiveShell;
+import org.slf4j.LoggerFactory;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
@@ -92,8 +93,12 @@ public class CqlshCommand implements Callable<Integer> {
 
     @Override
     public Integer call() throws Exception {
+        // Logging is configured via logback.xml with default level WARNING
+        // If debug flag is enabled, programmatically set root logger to DEBUG level
         if (debug) {
-            System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "DEBUG");
+            ch.qos.logback.classic.Logger root = (ch.qos.logback.classic.Logger) 
+                org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+            root.setLevel(ch.qos.logback.classic.Level.DEBUG);
         }
 
         // Create connection config from parameters
