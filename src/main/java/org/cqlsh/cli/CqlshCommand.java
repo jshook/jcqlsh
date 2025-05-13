@@ -78,6 +78,10 @@ public class CqlshCommand implements Callable<Integer> {
     @Option(names = {"--max-width"}, description = "Maximum width for tabular output")
     private int maxWidth = 100;
 
+    // UI options
+    @Option(names = {"--ui"}, description = "UI mode (terminal, lanterna)")
+    private String uiMode = "terminal";
+
     // Script execution
     @Option(names = {"-f", "--file"}, description = "Execute commands from file")
     private File file;
@@ -146,8 +150,17 @@ public class CqlshCommand implements Callable<Integer> {
 
             // Otherwise, start interactive mode
             interactiveMode = true;
-            InteractiveShell shell = new InteractiveShell(connectionManager, formattingConfig);
-            return shell.start();
+
+            // Choose the appropriate shell based on the UI mode
+            if ("lanterna".equalsIgnoreCase(uiMode)) {
+                // Use the lanterna-based UI
+                org.cqlsh.shell.LanternaShell shell = new org.cqlsh.shell.LanternaShell(connectionManager, formattingConfig);
+                return shell.start();
+            } else {
+                // Use the traditional terminal UI
+                InteractiveShell shell = new InteractiveShell(connectionManager, formattingConfig);
+                return shell.start();
+            }
         } catch (Exception e) {
             // Only print stack trace in debug mode, otherwise just print the error message
             if (debug) {

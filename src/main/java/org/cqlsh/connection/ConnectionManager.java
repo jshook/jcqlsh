@@ -62,8 +62,9 @@ public class ConnectionManager implements AutoCloseable {
                 .addContactPoint(new InetSocketAddress(config.host(), config.port()))
                 .withConfigLoader(configLoader);
 
-            // Add authentication if provided
-            if (config.username() != null && !config.username().isBlank()) {
+            // Add authentication if both username and password are provided
+            if (config.username() != null && !config.username().isBlank() && 
+                config.password() != null && !config.password().isBlank()) {
                 builder.withAuthCredentials(config.username(), config.password());
             }
 
