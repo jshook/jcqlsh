@@ -152,7 +152,7 @@ public class CqlshCommand implements Callable<Integer> {
             interactiveMode = true;
 
             // Choose the appropriate shell based on the UI mode
-            if ("lanterna".equalsIgnoreCase(uiMode)) {
+                if ("lanterna".equalsIgnoreCase(uiMode)) {
                 // Use the lanterna-based UI
                 org.cqlsh.shell.LanternaShell shell = new org.cqlsh.shell.LanternaShell(connectionManager, formattingConfig);
                 return shell.start();

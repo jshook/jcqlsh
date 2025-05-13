@@ -174,6 +174,105 @@ public class InteractiveShell {
     }
 
     /**
+     * Gets column names for a specific table.
+     *
+     * @param tableSpec the table name or fully qualified table name (keyspace.table)
+     * @return a list of column names
+     */
+    private List<String> getColumnNames(String tableSpec) {
+        try {
+            TableMetadata tableMetadata = connectionManager.getTableMetadata(tableSpec);
+            List<String> columnNames = new ArrayList<>();
+
+            // Add regular columns
+            tableMetadata.getColumns().forEach((name, column) -> {
+                columnNames.add(name.toString());
+            });
+
+            return columnNames;
+        } catch (Exception e) {
+            logger.warn("Error retrieving column names for table: {}", tableSpec, e);
+            return List.of();
+        }
+    }
+
+    /**
+     * Checks if the input line is after a specific keyword.
+     *
+     * @param line the input line
+     * @param keyword the keyword to check for
+     * @return true if the input line is after the keyword, false otherwise
+     */
+    private boolean isAfterKeyword(String line, String keyword) {
+        String lowerLine = line.toLowerCase();
+        String lowerKeyword = keyword.toLowerCase();
+
+        // Check if the keyword is in the line
+        int keywordIndex = lowerLine.indexOf(lowerKeyword);
+        if (keywordIndex == -1) {
+            return false;
+        }
+
+        // Check if the keyword is a whole word (surrounded by spaces or at the beginning/end of the line)
+        int keywordEnd = keywordIndex + lowerKeyword.length();
+        boolean validStart = keywordIndex == 0 || Character.isWhitespace(lowerLine.charAt(keywordIndex - 1));
+        boolean validEnd = keywordEnd == lowerLine.length() || Character.isWhitespace(lowerLine.charAt(keywordEnd));
+
+        return validStart && validEnd;
+    }
+
+    /**
+     * Extracts the table name from a CQL query.
+     *
+     * @param query the CQL query
+     * @return the table name, or null if not found
+     */
+    private String extractTableName(String query) {
+        String lowerQuery = query.toLowerCase();
+
+        // Check for FROM clause
+        int fromIndex = lowerQuery.indexOf("from");
+        if (fromIndex != -1 && isAfterKeyword(lowerQuery, "from")) {
+            // Extract the word after FROM
+            String afterFrom = lowerQuery.substring(fromIndex + 4).trim();
+            int spaceIndex = afterFrom.indexOf(' ');
+            if (spaceIndex == -1) {
+                return afterFrom; // No space after table name
+            } else {
+                return afterFrom.substring(0, spaceIndex);
+            }
+        }
+
+        // Check for UPDATE clause
+        int updateIndex = lowerQuery.indexOf("update");
+        if (updateIndex != -1 && isAfterKeyword(lowerQuery, "update")) {
+            // Extract the word after UPDATE
+            String afterUpdate = lowerQuery.substring(updateIndex + 6).trim();
+            int spaceIndex = afterUpdate.indexOf(' ');
+            if (spaceIndex == -1) {
+                return afterUpdate; // No space after table name
+            } else {
+                return afterUpdate.substring(0, spaceIndex);
+            }
+        }
+
+        // Check for INSERT INTO clause
+        int intoIndex = lowerQuery.indexOf("into");
+        if (intoIndex != -1 && isAfterKeyword(lowerQuery, "into")) {
+            // Extract the word after INTO
+            String afterInto = lowerQuery.substring(intoIndex + 4).trim();
+            int spaceIndex = afterInto.indexOf(' ');
+            if (spaceIndex == -1) {
+                return afterInto; // No space after table name
+            } else {
+                return afterInto.substring(0, spaceIndex);
+            }
+        }
+
+        return null; // No table name found
+    }
+
+    /**
      * Creates a completer for auto-completion of CQL keywords, keyspaces, tables, and columns.
      *
      * @return a completer for auto-completion
@@ -195,13 +294,46 @@ public class InteractiveShell {
         // Create a dynamic completer for tables in the current keyspace
         Completer tableCompleter = (LineReader reader, ParsedLine line, List<Candidate> candidates) -> {
             try {
-                String currentKeyspace = connectionManager.getCurrentKeyspace();
-                if (currentKeyspace != null) {
-                    List<String> tables = connectionManager.getTables(currentKeyspace);
-                    tables.forEach(table -> candidates.add(new Candidate(table)));
+                // Check if we're after a FROM keyword
+                String buffer = line.line();
+                String word = line.word().toLowerCase();
+
+                // If we're in a FROM clause, suggest tables
+                if (isAfterKeyword(buffer, "from") || isAfterKeyword(buffer, "update") || 
+                    isAfterKeyword(buffer, "into") || isAfterKeyword(buffer, "join")) {
+                    String currentKeyspace = connectionManager.getCurrentKeyspace();
+                    if (currentKeyspace != null) {
+                        List<String> tables = connectionManager.getTables(currentKeyspace);
+                        tables.forEach(table -> {
+                            if (table.toLowerCase().startsWith(word.toLowerCase())) {
+                                candidates.add(new Candidate(table));
+                            }
+                        });
+                    }
                 }
             } catch (Exception e) {
                 logger.warn("Error retrieving tables for completion", e);
+            }
+        };
+
+        // Create a dynamic completer for columns in the current context
+        Completer columnCompleter = (LineReader reader, ParsedLine line, List<Candidate> candidates) -> {
+            try {
+                String buffer = line.line();
+                String word = line.word().toLowerCase();
+
+                // Try to find the table name in the query
+                String tableName = extractTableName(buffer);
+                if (tableName != null) {
+                    List<String> columns = getColumnNames(tableName);
+                    columns.forEach(column -> {
+                        if (column.toLowerCase().startsWith(word.toLowerCase())) {
+                            candidates.add(new Candidate(column));
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                logger.warn("Error retrieving columns for completion", e);
             }
         };
 
@@ -212,13 +344,55 @@ public class InteractiveShell {
                 "SERIAL CONSISTENCY", "PAGING", "SHOW VERSION", "SHOW HOST", "SHOW SESSION", "LOGIN"
         );
 
-        // Combine all completers
-        return new AggregateCompleter(
-                keywordCompleter,
-                keyspaceCompleter,
-                tableCompleter,
-                specialCommandCompleter
-        );
+        // Create a context-aware completer that suggests different things based on the input
+        Completer contextAwareCompleter = (LineReader reader, ParsedLine line, List<Candidate> candidates) -> {
+            String buffer = line.line();
+            String word = line.word().toLowerCase();
+
+            // If the line is empty or we're at the start of the line, suggest keywords and special commands
+            if (buffer.trim().isEmpty() || line.wordIndex() == 0) {
+                // Add CQL keywords
+                for (String keyword : CQL_KEYWORDS) {
+                    if (keyword.toLowerCase().startsWith(word)) {
+                        candidates.add(new Candidate(keyword));
+                    }
+                }
+
+                // Add special commands
+                specialCommandCompleter.complete(reader, line, candidates);
+                return;
+            }
+
+            // If we're after a USE keyword, suggest keyspaces
+            if (isAfterKeyword(buffer, "use")) {
+                keyspaceCompleter.complete(reader, line, candidates);
+                return;
+            }
+
+            // If we're after a FROM, UPDATE, INTO, or JOIN keyword, suggest tables
+            if (isAfterKeyword(buffer, "from") || isAfterKeyword(buffer, "update") || 
+                isAfterKeyword(buffer, "into") || isAfterKeyword(buffer, "join")) {
+                tableCompleter.complete(reader, line, candidates);
+                return;
+            }
+
+            // If we're after a SELECT keyword or in a WHERE clause, suggest columns
+            if (isAfterKeyword(buffer, "select") || isAfterKeyword(buffer, "where") || 
+                isAfterKeyword(buffer, "set") || buffer.contains("=")) {
+                columnCompleter.complete(reader, line, candidates);
+                return;
+            }
+
+            // Default to suggesting keywords
+            for (String keyword : CQL_KEYWORDS) {
+                if (keyword.toLowerCase().startsWith(word)) {
+                    candidates.add(new Candidate(keyword));
+                }
+            }
+        };
+
+        // Return the context-aware completer
+        return contextAwareCompleter;
     }
 
     /**

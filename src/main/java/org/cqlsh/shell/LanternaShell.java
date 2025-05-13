@@ -1,6 +1,7 @@
 package org.cqlsh.shell;
 
 import com.datastax.oss.driver.api.core.cql.ResultSet;
+import com.datastax.oss.driver.api.core.metadata.schema.TableMetadata;
 import com.googlecode.lanterna.TerminalPosition;
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.TextColor;
@@ -22,14 +23,29 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Lanterna-based text UI implementation for the CQL shell.
  */
 public class LanternaShell {
     private static final Logger logger = LoggerFactory.getLogger(LanternaShell.class);
+
+    // CQL Keywords for auto-completion
+    private static final String[] CQL_KEYWORDS = {
+        "SELECT", "FROM", "WHERE", "AND", "OR", "INSERT", "INTO", "VALUES", "UPDATE", "SET",
+        "DELETE", "CREATE", "ALTER", "DROP", "TABLE", "KEYSPACE", "TYPE", "INDEX", "MATERIALIZED",
+        "VIEW", "USE", "WITH", "AS", "ORDER", "BY", "ASC", "DESC", "LIMIT", "ALLOW", "FILTERING",
+        "CONTAINS", "USING", "TTL", "TIMESTAMP", "IF", "NOT", "EXISTS", "PRIMARY", "KEY", "FROZEN",
+        "LIST", "MAP", "SET", "TUPLE", "FUNCTION", "RETURNS", "CALLED", "INPUT", "LANGUAGE", "AGGREGATE",
+        "SFUNC", "STYPE", "FINALFUNC", "INITCOND", "ROLE", "AUTHORIZE", "GRANT", "REVOKE", "PERMISSION",
+        "ON", "TO", "OF", "MODIFY", "DESCRIBE", "TEXT", "ASCII", "BIGINT", "BLOB", "BOOLEAN", "COUNTER",
+        "DATE", "DECIMAL", "DOUBLE", "FLOAT", "INET", "INT", "SMALLINT", "TIME", "TIMESTAMP", "TIMEUUID",
+        "TINYINT", "UUID", "VARCHAR", "VARINT", "TOKEN", "WRITETIME", "NULL", "TRUE", "FALSE"
+    };
 
     private final ConnectionManager connectionManager;
     private final FormattingConfig formattingConfig;
@@ -108,6 +124,197 @@ public class LanternaShell {
     }
 
     /**
+     * Gets column names for a specific table.
+     *
+     * @param tableSpec the table name or fully qualified table name (keyspace.table)
+     * @return a list of column names
+     */
+    private List<String> getColumnNames(String tableSpec) {
+        try {
+            TableMetadata tableMetadata = connectionManager.getTableMetadata(tableSpec);
+            List<String> columnNames = new ArrayList<>();
+
+            // Add regular columns
+            tableMetadata.getColumns().forEach((name, column) -> {
+                columnNames.add(name.toString());
+            });
+
+            return columnNames;
+        } catch (Exception e) {
+            logger.warn("Error retrieving column names for table: {}", tableSpec, e);
+            return List.of();
+        }
+    }
+
+    /**
+     * Checks if the input line is after a specific keyword.
+     *
+     * @param line the input line
+     * @param keyword the keyword to check for
+     * @return true if the input line is after the keyword, false otherwise
+     */
+    private boolean isAfterKeyword(String line, String keyword) {
+        String lowerLine = line.toLowerCase();
+        String lowerKeyword = keyword.toLowerCase();
+
+        // Check if the keyword is in the line
+        int keywordIndex = lowerLine.indexOf(lowerKeyword);
+        if (keywordIndex == -1) {
+            return false;
+        }
+
+        // Check if the keyword is a whole word (surrounded by spaces or at the beginning/end of the line)
+        int keywordEnd = keywordIndex + lowerKeyword.length();
+        boolean validStart = keywordIndex == 0 || Character.isWhitespace(lowerLine.charAt(keywordIndex - 1));
+        boolean validEnd = keywordEnd == lowerLine.length() || Character.isWhitespace(lowerLine.charAt(keywordEnd));
+
+        return validStart && validEnd;
+    }
+
+    /**
+     * Extracts the table name from a CQL query.
+     *
+     * @param query the CQL query
+     * @return the table name, or null if not found
+     */
+    private String extractTableName(String query) {
+        String lowerQuery = query.toLowerCase();
+
+        // Check for FROM clause
+        int fromIndex = lowerQuery.indexOf("from");
+        if (fromIndex != -1 && isAfterKeyword(lowerQuery, "from")) {
+            // Extract the word after FROM
+            String afterFrom = lowerQuery.substring(fromIndex + 4).trim();
+            int spaceIndex = afterFrom.indexOf(' ');
+            if (spaceIndex == -1) {
+                return afterFrom; // No space after table name
+            } else {
+                return afterFrom.substring(0, spaceIndex);
+            }
+        }
+
+        // Check for UPDATE clause
+        int updateIndex = lowerQuery.indexOf("update");
+        if (updateIndex != -1 && isAfterKeyword(lowerQuery, "update")) {
+            // Extract the word after UPDATE
+            String afterUpdate = lowerQuery.substring(updateIndex + 6).trim();
+            int spaceIndex = afterUpdate.indexOf(' ');
+            if (spaceIndex == -1) {
+                return afterUpdate; // No space after table name
+            } else {
+                return afterUpdate.substring(0, spaceIndex);
+            }
+        }
+
+        // Check for INSERT INTO clause
+        int intoIndex = lowerQuery.indexOf("into");
+        if (intoIndex != -1 && isAfterKeyword(lowerQuery, "into")) {
+            // Extract the word after INTO
+            String afterInto = lowerQuery.substring(intoIndex + 4).trim();
+            int spaceIndex = afterInto.indexOf(' ');
+            if (spaceIndex == -1) {
+                return afterInto; // No space after table name
+            } else {
+                return afterInto.substring(0, spaceIndex);
+            }
+        }
+
+        return null; // No table name found
+    }
+
+    /**
+     * Performs autocompletion on the current input.
+     *
+     * @param input the current input text
+     * @return the autocompleted text, or the original input if no completion is available
+     */
+    private String autocomplete(String input) {
+        if (input == null || input.trim().isEmpty()) {
+            return input;
+        }
+
+        String trimmedInput = input.trim();
+        String lowerInput = trimmedInput.toLowerCase();
+
+        // Get the last word in the input (the one we're trying to complete)
+        int lastSpaceIndex = trimmedInput.lastIndexOf(' ');
+        String lastWord = lastSpaceIndex == -1 ? trimmedInput : trimmedInput.substring(lastSpaceIndex + 1);
+        String prefix = lastSpaceIndex == -1 ? "" : trimmedInput.substring(0, lastSpaceIndex + 1);
+
+        // If the input is empty or we're at the start of a new word, suggest keywords and special commands
+        if (lastWord.isEmpty()) {
+            // Default to the first keyword if available
+            if (CQL_KEYWORDS.length > 0) {
+                return prefix + CQL_KEYWORDS[0];
+            }
+            return input;
+        }
+
+        // If we're after a USE keyword, suggest keyspaces
+        if (isAfterKeyword(lowerInput, "use")) {
+            try {
+                List<String> keyspaces = connectionManager.getKeyspaces();
+                for (String keyspace : keyspaces) {
+                    if (keyspace.toLowerCase().startsWith(lastWord.toLowerCase())) {
+                        return prefix + keyspace;
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Error retrieving keyspaces for completion", e);
+            }
+            return input;
+        }
+
+        // If we're after a FROM, UPDATE, INTO, or JOIN keyword, suggest tables
+        if (isAfterKeyword(lowerInput, "from") || isAfterKeyword(lowerInput, "update") || 
+            isAfterKeyword(lowerInput, "into") || isAfterKeyword(lowerInput, "join")) {
+            try {
+                String currentKeyspace = connectionManager.getCurrentKeyspace();
+                if (currentKeyspace != null) {
+                    List<String> tables = connectionManager.getTables(currentKeyspace);
+                    for (String table : tables) {
+                        if (table.toLowerCase().startsWith(lastWord.toLowerCase())) {
+                            return prefix + table;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Error retrieving tables for completion", e);
+            }
+            return input;
+        }
+
+        // If we're after a SELECT keyword or in a WHERE clause, suggest columns
+        if (isAfterKeyword(lowerInput, "select") || isAfterKeyword(lowerInput, "where") || 
+            isAfterKeyword(lowerInput, "set") || lowerInput.contains("=")) {
+            try {
+                String tableName = extractTableName(lowerInput);
+                if (tableName != null) {
+                    List<String> columns = getColumnNames(tableName);
+                    for (String column : columns) {
+                        if (column.toLowerCase().startsWith(lastWord.toLowerCase())) {
+                            return prefix + column;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Error retrieving columns for completion", e);
+            }
+            return input;
+        }
+
+        // Default to suggesting keywords
+        for (String keyword : CQL_KEYWORDS) {
+            if (keyword.toLowerCase().startsWith(lastWord.toLowerCase())) {
+                return prefix + keyword;
+            }
+        }
+
+        // If no completion is available, return the original input
+        return input;
+    }
+
+    /**
      * Creates the main window for the shell.
      *
      * @return the main window
@@ -139,14 +346,14 @@ public class LanternaShell {
         mainPanel.addComponent(inputBox);
 
         // Add help text
-        mainPanel.addComponent(new Label("Press Ctrl+C to exit, Enter to execute command"));
+        mainPanel.addComponent(new Label("Press Tab for autocompletion, Ctrl+C to exit, Enter to execute command"));
 
         window.setComponent(mainPanel);
 
         // Handle window close
         window.setCloseWindowWithEscape(true);
 
-        // Add a custom key handler to handle Ctrl+C
+        // Add a custom key handler to handle Ctrl+C and Tab
         inputBox.setInputFilter((interactionEvent, keyStroke) -> {
             // Handle Enter key to execute commands
             if (keyStroke.getCharacter() == '\n') {
@@ -154,6 +361,17 @@ public class LanternaShell {
                 inputBox.setText("");
                 processCommand(command);
                 return false; // Don't add the newline to the input
+            }
+
+            // Handle Tab key for autocompletion
+            if (keyStroke.getKeyType() == KeyType.Tab) {
+                String currentText = inputBox.getText();
+                String completedText = autocomplete(currentText);
+                if (!completedText.equals(currentText)) {
+                    inputBox.setText(completedText);
+                    inputBox.setCaretPosition(completedText.length());
+                }
+                return false; // Don't add the tab character to the input
             }
 
             // Handle Ctrl+C to exit
