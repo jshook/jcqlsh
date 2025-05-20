@@ -147,7 +147,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>org.cqlsh.JCqlshApp</mainClass>
+                            <mainClass>com.github.jshook.JCqlshApp</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
@@ -166,7 +166,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
                 <configuration>
-                    <mainClass>org.cqlsh.JCqlshApp</mainClass>
+                    <mainClass>com.github.jshook.JCqlshApp</mainClass>
                     <arguments>
                         <!-- Add any default arguments here -->
                     </arguments>

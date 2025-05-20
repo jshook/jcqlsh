@@ -1,8 +1,7 @@
-package org.cqlsh.formatting;
+package com.github.jshook.formatting;
 
-import org.cqlsh.config.FormattingConfig;
+import com.github.jshook.config.FormattingConfig;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 

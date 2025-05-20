@@ -1,9 +1,9 @@
-package org.cqlsh.commands;
+package com.github.jshook.commands;
 
-import org.cqlsh.config.FormattingConfig;
-import org.cqlsh.connection.ConnectionManager;
+import com.github.jshook.config.FormattingConfig;
+import com.github.jshook.connection.ConnectionManager;
 import org.cqlsh.formatting.ResultFormatter;
-import org.cqlsh.formatting.TableFormatter;
+import com.github.jshook.formatting.TableFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

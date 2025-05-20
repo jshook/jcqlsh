@@ -1,7 +1,7 @@
-package org.cqlsh;
+package com.github.jshook;
 
 import picocli.CommandLine;
-import org.cqlsh.cli.CqlshCommand;
+import com.github.jshook.cli.CqlshCommand;
 
 /**
  * Main entry point for JCqlsh - Java implementation of the Cassandra Query Language Shell.
