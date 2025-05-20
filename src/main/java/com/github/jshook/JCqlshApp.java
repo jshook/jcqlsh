@@ -13,10 +13,8 @@ public class JCqlshApp {
                 .setCaseInsensitiveEnumValuesAllowed(true)
                 .setColorScheme(CommandLine.Help.defaultColorScheme(CommandLine.Help.Ansi.AUTO))
                 .execute(args);
-        
-        // Only exit if we're not in interactive mode (for script execution)
-        if (!command.isInteractiveMode()) {
-            System.exit(exitCode);
-        }
+
+        // Always exit with the appropriate exit code
+        System.exit(exitCode);
     }
 }

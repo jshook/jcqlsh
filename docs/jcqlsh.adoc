@@ -55,43 +55,43 @@ Usage:
 Options:
 
 `-C` `--color`::
-  Force color output
+Force color output
 `--no-color`::
-  Disable color output
+Disable color output
 `--browser`::
-  Specify the browser to use for displaying cqlsh help. This can be one
-  of the https://docs.python.org/2/library/webbrowser.html[supported
+Specify the browser to use for displaying cqlsh help. This can be one
+of the https://docs.python.org/2/library/webbrowser.html[supported
   browser names] (e.g. `firefox`) or a browser path followed by `%s`
-  (e.g. `/usr/bin/google-chrome-stable %s`).
+(e.g. `/usr/bin/google-chrome-stable %s`).
 `--ssl`::
-  Use SSL when connecting to Cassandra
+Use SSL when connecting to Cassandra
 `-u` `--user`::
-  Username to authenticate against Cassandra with
+Username to authenticate against Cassandra with
 `-p` `--password`::
-  Password to authenticate against Cassandra with, should be used in
-  conjunction with `--user`
+Password to authenticate against Cassandra with, should be used in
+conjunction with `--user`
 `-k` `--keyspace`::
-  Keyspace to authenticate to, should be used in conjunction with
-  `--user`
+Keyspace to authenticate to, should be used in conjunction with
+`--user`
 `-f` `--file`::
-  Execute commands from the given file, then exit
+Execute commands from the given file, then exit
 `--debug`::
-  Print additional debugging information
+Print additional debugging information
 `--encoding`::
-  Specify a non-default encoding for output (defaults to UTF-8)
+Specify a non-default encoding for output (defaults to UTF-8)
 `--cqlshrc`::
-  Specify a non-default location for the `cqlshrc` file
+Specify a non-default location for the `cqlshrc` file
 `-e` `--execute`::
-  Execute the given statement, then exit
+Execute the given statement, then exit
 `--connect-timeout`::
-  Specify the connection timeout in seconds (defaults to 2s)
+Specify the connection timeout in seconds (defaults to 2s)
 `--python /path/to/python`::
-  Specify the full path to Python interpreter to override default on
-  systems with multiple interpreters installed
+Specify the full path to Python interpreter to override default on
+systems with multiple interpreters installed
 `--request-timeout`::
-  Specify the request timeout in seconds (defaults to 10s)
+Specify the request timeout in seconds (defaults to 10s)
 `-t` `--tty`::
-  Force tty mode (command prompt)
+Force tty mode (command prompt)
 
 == Special Commands
 
@@ -378,21 +378,21 @@ See `shared-copy-options` for options that apply to both `COPY TO` and
 ==== Options for `COPY TO`
 
 `MAXREQUESTS`::
-  The maximum number token ranges to fetch simultaneously. Defaults to
-  6.
+The maximum number token ranges to fetch simultaneously. Defaults to
+6.
 `PAGESIZE`::
-  The number of rows to fetch in a single page. Defaults to 1000.
+The number of rows to fetch in a single page. Defaults to 1000.
 `PAGETIMEOUT`::
-  By default the page timeout is 10 seconds per 1000 entries in the page
-  size or 10 seconds if pagesize is smaller.
+By default the page timeout is 10 seconds per 1000 entries in the page
+size or 10 seconds if pagesize is smaller.
 `BEGINTOKEN`, `ENDTOKEN`::
-  Token range to export. Defaults to exporting the full ring.
+Token range to export. Defaults to exporting the full ring.
 `MAXOUTPUTSIZE`::
-  The maximum size of the output file measured in number of lines;
-  beyond this maximum the output file will be split into segments. -1
-  means unlimited, and is the default.
+The maximum size of the output file measured in number of lines;
+beyond this maximum the output file will be split into segments. -1
+means unlimited, and is the default.
 `ENCODING`::
-  The encoding used for characters. Defaults to `utf8`.
+The encoding used for characters. Defaults to `utf8`.
 
 === `COPY FROM`
 
@@ -420,63 +420,63 @@ See `shared-copy-options` for options that apply to both `COPY TO` and
 ==== Options for `COPY TO`
 
 `INGESTRATE`::
-  The maximum number of rows to process per second. Defaults to 100000.
+The maximum number of rows to process per second. Defaults to 100000.
 `MAXROWS`::
-  The maximum number of rows to import. -1 means unlimited, and is the
-  default.
+The maximum number of rows to import. -1 means unlimited, and is the
+default.
 `SKIPROWS`::
-  A number of initial rows to skip. Defaults to 0.
+A number of initial rows to skip. Defaults to 0.
 `SKIPCOLS`::
-  A comma-separated list of column names to ignore. By default, no
-  columns are skipped.
+A comma-separated list of column names to ignore. By default, no
+columns are skipped.
 `MAXPARSEERRORS`::
-  The maximum global number of parsing errors to ignore. -1 means
-  unlimited, and is the default.
+The maximum global number of parsing errors to ignore. -1 means
+unlimited, and is the default.
 `MAXINSERTERRORS`::
-  The maximum global number of insert errors to ignore. -1 means
-  unlimited. The default is 1000.
+The maximum global number of insert errors to ignore. -1 means
+unlimited. The default is 1000.
 `ERRFILE` =::
-  A file to store all rows that could not be imported, by default this
-  is `import_<ks>_<table>.err` where `<ks>` is your keyspace and
-  `<table>` is your table name.
+A file to store all rows that could not be imported, by default this
+is `import_<ks>_<table>.err` where `<ks>` is your keyspace and
+`<table>` is your table name.
 `MAXBATCHSIZE`::
-  The max number of rows inserted in a single batch. Defaults to 20.
+The max number of rows inserted in a single batch. Defaults to 20.
 `MINBATCHSIZE`::
-  The min number of rows inserted in a single batch. Defaults to 2.
+The min number of rows inserted in a single batch. Defaults to 2.
 `CHUNKSIZE`::
-  The number of rows that are passed to child worker processes from the
-  main process at a time. Defaults to 1000.
+The number of rows that are passed to child worker processes from the
+main process at a time. Defaults to 1000.
 
 ==== Shared COPY Options
 
 Options that are common to both `COPY TO` and `COPY FROM`.
 
 `NULLVAL`::
-  The string placeholder for null values. Defaults to `null`.
+The string placeholder for null values. Defaults to `null`.
 `HEADER`::
-  For `COPY TO`, controls whether the first line in the CSV output file
-  will contain the column names. For COPY FROM, specifies whether the
-  first line in the CSV input file contains column names. Defaults to
-  `false`.
+For `COPY TO`, controls whether the first line in the CSV output file
+will contain the column names. For COPY FROM, specifies whether the
+first line in the CSV input file contains column names. Defaults to
+`false`.
 `DECIMALSEP`::
-  The character that is used as the decimal point separator. Defaults to
-  `.`.
+The character that is used as the decimal point separator. Defaults to
+`.`.
 `THOUSANDSSEP`::
-  The character that is used to separate thousands. Defaults to the
-  empty string.
+The character that is used to separate thousands. Defaults to the
+empty string.
 `BOOLSTYlE`::
-  The string literal format for boolean values. Defaults to
-  `True,False`.
+The string literal format for boolean values. Defaults to
+`True,False`.
 `NUMPROCESSES`::
-  The number of child worker processes to create for `COPY` tasks.
-  Defaults to a max of 4 for `COPY FROM` and 16 for `COPY TO`. However,
-  at most (num_cores - 1) processes will be created.
+The number of child worker processes to create for `COPY` tasks.
+Defaults to a max of 4 for `COPY FROM` and 16 for `COPY TO`. However,
+at most (num_cores - 1) processes will be created.
 `MAXATTEMPTS`::
-  The maximum number of failed attempts to fetch a range of data (when
-  using `COPY TO`) or insert a chunk of data (when using `COPY FROM`)
-  before giving up. Defaults to 5.
+The maximum number of failed attempts to fetch a range of data (when
+using `COPY TO`) or insert a chunk of data (when using `COPY FROM`)
+before giving up. Defaults to 5.
 `REPORTFREQUENCY`::
-  How often status updates are refreshed, in seconds. Defaults to 0.25.
+How often status updates are refreshed, in seconds. Defaults to 0.25.
 `RATEFILE`::
-  An optional file to output rate statistics to. By default, statistics
-  are not output to a file.
+An optional file to output rate statistics to. By default, statistics
+are not output to a file.
