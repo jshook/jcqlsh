@@ -1,8 +1,8 @@
-package org.cqlsh.connection;
+package com.github.jshook.connection;
 
+import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
-import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
@@ -11,13 +11,15 @@ import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.metadata.Metadata;
 import com.datastax.oss.driver.api.core.metadata.schema.KeyspaceMetadata;
 import com.datastax.oss.driver.api.core.metadata.schema.TableMetadata;
-import org.cqlsh.config.ConnectionConfig;
+import com.datastax.oss.driver.api.core.servererrors.QueryExecutionException;
+import com.github.jshook.config.ConnectionConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -153,7 +155,7 @@ public class ConnectionManager implements AutoCloseable {
 
             return session.execute(statement);
         } catch (Exception e) {
-            throw new QueryExecutionException("Failed to execute query: " + e.getMessage(), e);
+            throw e;
         }
     }
 
@@ -418,5 +420,55 @@ public class ConnectionManager implements AutoCloseable {
             throw new IllegalStateException("Not connected to Cassandra");
         }
         return session.getMetadata().getClusterName().orElse("Unknown Cluster");
+    }
+
+    /**
+     * Gets information about datacenters in the cluster.
+     * @return a list of maps containing datacenter information
+     */
+    public List<Map<String, String>> getDatacenters() {
+        CqlSession session = sessionRef.get();
+        if (session == null) {
+            throw new IllegalStateException("Not connected to Cassandra");
+        }
+
+        try {
+            // Get local node datacenter
+            ResultSet localRs = execute("SELECT data_center, host_id FROM system.local");
+            Row localRow = localRs.one();
+
+            // Get peer nodes datacenters
+            ResultSet peersRs = execute("SELECT data_center, host_id FROM system.peers");
+            List<Row> peerRows = peersRs.all();
+
+            // Count nodes per datacenter
+            java.util.HashMap<String, Integer> dcNodeCount = new java.util.HashMap<>();
+
+            // Add local node
+            if (localRow != null) {
+                String dc = localRow.getString("data_center");
+                dcNodeCount.put(dc, dcNodeCount.getOrDefault(dc, 0) + 1);
+            }
+
+            // Add peer nodes
+            for (Row peerRow : peerRows) {
+                String dc = peerRow.getString("data_center");
+                dcNodeCount.put(dc, dcNodeCount.getOrDefault(dc, 0) + 1);
+            }
+
+            // Create result list
+            List<Map<String, String>> result = new ArrayList<>();
+            for (Map.Entry<String, Integer> entry : dcNodeCount.entrySet()) {
+                java.util.HashMap<String, String> dcInfo = new java.util.HashMap<>();
+                dcInfo.put("name", entry.getKey());
+                dcInfo.put("nodeCount", String.valueOf(entry.getValue()));
+                result.add(dcInfo);
+            }
+
+            return result;
+        } catch (Exception e) {
+            logger.warn("Could not get datacenter information", e);
+            return new ArrayList<>();
+        }
     }
 }

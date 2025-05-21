@@ -1,32 +1,37 @@
-package org.cqlsh.shell;
+package com.github.jshook.shell;
 
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.metadata.schema.TableMetadata;
-import com.googlecode.lanterna.TerminalPosition;
+import com.github.jshook.config.FormattingConfig;
+import com.github.jshook.connection.ConnectionManager;
+import com.datastax.oss.driver.api.core.servererrors.QueryExecutionException;
+import com.github.jshook.output.ResultFormatter;
+import com.github.jshook.output.ResultFormatterFactory;
 import com.googlecode.lanterna.TerminalSize;
 import com.googlecode.lanterna.TextColor;
-import com.googlecode.lanterna.gui2.*;
-import com.googlecode.lanterna.input.KeyStroke;
+import com.googlecode.lanterna.gui2.BasicWindow;
+import com.googlecode.lanterna.gui2.Borders;
+import com.googlecode.lanterna.gui2.DefaultWindowManager;
+import com.googlecode.lanterna.gui2.Direction;
+import com.googlecode.lanterna.gui2.EmptySpace;
+import com.googlecode.lanterna.gui2.Label;
+import com.googlecode.lanterna.gui2.LinearLayout;
+import com.googlecode.lanterna.gui2.MultiWindowTextGUI;
+import com.googlecode.lanterna.gui2.Panel;
+import com.googlecode.lanterna.gui2.TextBox;
+import com.googlecode.lanterna.gui2.Window;
+import com.googlecode.lanterna.gui2.WindowBasedTextGUI;
 import com.googlecode.lanterna.input.KeyType;
 import com.googlecode.lanterna.screen.Screen;
 import com.googlecode.lanterna.screen.TerminalScreen;
 import com.googlecode.lanterna.terminal.DefaultTerminalFactory;
 import com.googlecode.lanterna.terminal.Terminal;
-
-import java.util.concurrent.atomic.AtomicBoolean;
-import org.cqlsh.config.FormattingConfig;
-import org.cqlsh.connection.ConnectionManager;
-import org.cqlsh.connection.QueryExecutionException;
-import org.cqlsh.output.ResultFormatter;
-import org.cqlsh.output.ResultFormatterFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Lanterna-based text UI implementation for the CQL shell.

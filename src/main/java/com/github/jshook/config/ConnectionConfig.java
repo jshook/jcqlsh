@@ -1,4 +1,4 @@
-package org.cqlsh.config;
+package com.github.jshook.config;
 
 import java.time.Duration;
 

@@ -1,9 +1,9 @@
 package com.github.jshook.script;
 
 import com.datastax.oss.driver.api.core.cql.ResultSet;
+import com.datastax.oss.driver.api.core.servererrors.QueryExecutionException;
 import com.github.jshook.config.FormattingConfig;
 import com.github.jshook.connection.ConnectionManager;
-import com.github.jshook.connection.QueryExecutionException;
 import com.github.jshook.output.ResultFormatter;
 import com.github.jshook.output.ResultFormatterFactory;
 import org.slf4j.Logger;

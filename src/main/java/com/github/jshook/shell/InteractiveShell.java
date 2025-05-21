@@ -1,15 +1,20 @@
-package org.cqlsh.shell;
+package com.github.jshook.shell;
 
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.metadata.schema.TableMetadata;
-import org.cqlsh.config.FormattingConfig;
-import org.cqlsh.connection.ConnectionManager;
-import org.cqlsh.connection.QueryExecutionException;
-import org.cqlsh.output.ResultFormatter;
-import org.cqlsh.output.ResultFormatterFactory;
-import org.jline.reader.*;
+import com.datastax.oss.driver.api.core.servererrors.QueryExecutionException;
+import com.github.jshook.config.FormattingConfig;
+import com.github.jshook.connection.ConnectionManager;
+import com.github.jshook.output.ResultFormatter;
+import com.github.jshook.output.ResultFormatterFactory;
+import org.jline.reader.Candidate;
+import org.jline.reader.Completer;
+import org.jline.reader.EndOfFileException;
+import org.jline.reader.LineReader;
+import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.ParsedLine;
+import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.DefaultParser;
-import org.jline.reader.impl.completer.AggregateCompleter;
 import org.jline.reader.impl.completer.StringsCompleter;
 import org.jline.reader.impl.history.DefaultHistory;
 import org.jline.terminal.Terminal;
@@ -22,7 +27,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**

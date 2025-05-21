@@ -1,12 +1,12 @@
-package org.cqlsh.cli;
+package com.github.jshook.cli;
 
-import org.cqlsh.config.ConnectionConfig;
-import org.cqlsh.config.FormattingConfig;
-import org.cqlsh.config.OutputFormat;
-import org.cqlsh.connection.ConnectionManager;
-import org.cqlsh.script.ScriptExecutor;
-import org.cqlsh.shell.InteractiveShell;
-import org.slf4j.LoggerFactory;
+import com.github.jshook.config.ConnectionConfig;
+import com.github.jshook.config.FormattingConfig;
+import com.github.jshook.config.OutputFormat;
+import com.github.jshook.connection.ConnectionManager;
+import com.github.jshook.script.ScriptExecutor;
+import com.github.jshook.shell.InteractiveShell;
+import com.github.jshook.shell.LanternaShell;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
@@ -154,7 +154,8 @@ public class CqlshCommand implements Callable<Integer> {
             // Choose the appropriate shell based on the UI mode
                 if ("lanterna".equalsIgnoreCase(uiMode)) {
                 // Use the lanterna-based UI
-                org.cqlsh.shell.LanternaShell shell = new org.cqlsh.shell.LanternaShell(connectionManager, formattingConfig);
+                LanternaShell
+                    shell = new LanternaShell(connectionManager, formattingConfig);
                 return shell.start();
             } else {
                 // Use the traditional terminal UI
